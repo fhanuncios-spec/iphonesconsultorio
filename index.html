@@ -1,3 +1,172 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Controle de iPhones</title>
+
+<style>
+body {
+  font-family: -apple-system, BlinkMacSystemFont, Arial;
+  background: #f2f2f7;
+  padding: 12px;
+}
+
+/* ===== TOPO ===== */
+.header {
+  background: #0f172a;
+  color: #fff;
+  padding: 14px;
+  border-radius: 14px;
+  margin-bottom: 12px;
+  text-align: center;
+}
+
+.header .resumo-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.header .box {
+  background: #1e293b;
+  padding: 10px;
+  border-radius: 10px;
+  font-size: 13px;
+}
+
+#resumoVendedor {
+  margin-top: 10px;
+  background: #22c55e;
+  color: #ffffff;
+  padding: 10px;
+  border-radius: 10px;
+  font-size: 13px;
+  display: none;
+}
+
+/* ===== FILTROS ===== */
+.filtros {
+  background: #fff;
+  padding: 12px;
+  border-radius: 14px;
+  margin-bottom: 12px;
+}
+
+select, input {
+  width: 100%;
+  padding: 10px;
+  margin-top: 8px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+}
+
+/* ===== LISTA ===== */
+#lista {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 380px) {
+  #lista {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ===== CARD ===== */
+.card {
+  background: #fff;
+  border-radius: 14px;
+  padding: 12px;
+  box-shadow: 0 2px 6px rgba(0,0,0,.06);
+}
+
+.card.disponivel {
+  background: #16a34a;
+  color: #ffffff;
+}
+
+.card.disponivel .info div {
+  background: rgba(255,255,255,0.15);
+  color: #ffffff;
+}
+
+.card h3 {
+  margin: 0 0 6px 0;
+  font-size: 14px;
+}
+
+.tags {
+  font-size: 11px;
+  margin-bottom: 6px;
+}
+
+.tag {
+  padding: 4px 6px;
+  border-radius: 6px;
+  font-weight: bold;
+}
+
+.entrada { background: #e0f2fe; color: #0369a1; }
+.vendido { background: #dcfce7; color: #166534; }
+.nao { background: #15803d; color: #ffffff; }
+
+.info {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.info div {
+  background: #f7f7f7;
+  padding: 6px;
+  border-radius: 6px;
+}
+
+.lucro {
+  margin-top: 8px;
+  padding: 8px;
+  border-radius: 10px;
+  background: #0f172a;
+  color: #ffffff;
+  font-weight: bold;
+  text-align: center;
+  font-size: 13px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="header">
+  <h3 id="lucroMes">💰 Selecione um mês</h3>
+
+  <div class="resumo-grid">
+    <div class="box" id="totalGeral">Total: 0</div>
+    <div class="box" id="totalVendidos">Vendidos: 0</div>
+    <div class="box" id="totalDisponiveis">Disponíveis: 0</div>
+  </div>
+
+  <div id="resumoVendedor"></div>
+</div>
+
+<div class="filtros">
+  <select id="vendedor"></select>
+
+  <select id="status">
+    <option value="">Todos</option>
+    <option value="SIM">Somente vendidos</option>
+    <option value="NAO">Somente disponíveis</option>
+  </select>
+
+  <input type="month" id="mes">
+</div>
+
+<div id="lista"></div>
+
 <script>
 const URL = "https://script.google.com/macros/s/AKfycbwuroYkA_84ft4-fCOheB7_euWSHZrNuPlX_mZA97zekM2KAAss-7LCGhPhL401SQ2E/exec";
 let dados = [];
@@ -11,8 +180,8 @@ fetch(URL)
   });
 
 document.getElementById("vendedor").onchange = render;
-document.getElementById("mes").onchange = render;
 document.getElementById("status").onchange = render;
+document.getElementById("mes").onchange = render;
 
 function carregarVendedores() {
   const select = document.getElementById("vendedor");
@@ -27,15 +196,13 @@ function carregarVendedores() {
 function render() {
   const lista = document.getElementById("lista");
   const vendedorFiltro = document.getElementById("vendedor").value;
-  const mesFiltro = document.getElementById("mes").value;
   const statusFiltro = document.getElementById("status").value;
+  const mesFiltro = document.getElementById("mes").value;
 
   lista.innerHTML = "";
 
   let total = 0, vendidos = 0, disponiveis = 0;
-  let lucroTotalMes = 0;
-  let vendidosVendedor = 0;
-  let lucroVendedor = 0;
+  let lucroMes = 0, lucroVendedor = 0, vendidosVendedor = 0;
 
   dados.slice(1).forEach(l => {
     const vendedor = l[1];
@@ -55,20 +222,17 @@ function render() {
 
     const lucro = valorVenda - valorEntrada - custoReparo - custosAdicionais;
 
-    // 📅 FILTRO DE MÊS (DATA DE VENDA)
     let mesVenda = "";
     if (l[13]) {
       const d = new Date(l[13]);
-      mesVenda = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+      mesVenda = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
     }
 
-    // 🔥 LUCRO TOTAL DO MÊS (APENAS VENDIDOS)
     if (vendido === "SIM" && mesFiltro && mesVenda === mesFiltro) {
-      lucroTotalMes += lucro;
+      lucroMes += lucro;
     }
 
-    // 👤 DADOS DO VENDEDOR SELECIONADO
-    if (vendido === "SIM" && vendedorFiltro && vendedorFiltro === vendedor) {
+    if (vendido === "SIM" && vendedorFiltro === vendedor) {
       vendidosVendedor++;
       lucroVendedor += lucro;
     }
@@ -85,10 +249,10 @@ function render() {
         </div>
 
         <div class="info">
-          <div><b>Bateria:</b> ${l[7]}%</div>
-          <div><b>Entrada:</b> R$ ${valorEntrada}</div>
-          <div><b>Reparo:</b> R$ ${custoReparo}</div>
-          <div><b>Adicional:</b> R$ ${custosAdicionais}</div>
+          <div>Pago: R$ ${valorEntrada}</div>
+          <div>Venda: R$ ${valorVenda}</div>
+          <div>Reparo: R$ ${custoReparo}</div>
+          <div>Adicional: R$ ${custosAdicionais}</div>
         </div>
 
         <div class="lucro">💰 Lucro: R$ ${lucro}</div>
@@ -100,21 +264,19 @@ function render() {
   document.getElementById("totalVendidos").innerText = `Vendidos: ${vendidos}`;
   document.getElementById("totalDisponiveis").innerText = `Disponíveis: ${disponiveis}`;
 
-  // 💰 TOPO – LUCRO DO MÊS
   document.getElementById("lucroMes").innerText =
-    mesFiltro
-      ? `💰 Lucro total do mês: R$ ${lucroTotalMes}`
-      : "💰 Selecione um mês";
+    mesFiltro ? `💰 Lucro total do mês: R$ ${lucroMes}` : "💰 Selecione um mês";
 
-  // 👤 RESUMO DO VENDEDOR
-  const comissaoBox = document.getElementById("comissaoVendedor");
+  const resumo = document.getElementById("resumoVendedor");
   if (vendedorFiltro) {
-    const comissao = vendidosVendedor * 30;
-    comissaoBox.style.display = "block";
-    comissaoBox.innerText =
-      `👤 ${vendedorFiltro} • Vendidos: ${vendidosVendedor} • Comissão: R$ ${comissao} • Lucro: R$ ${lucroVendedor}`;
+    resumo.style.display = "block";
+    resumo.innerText =
+      `👤 ${vendedorFiltro} • Vendidos: ${vendidosVendedor} • Comissão: R$ ${vendidosVendedor * 30} • Lucro: R$ ${lucroVendedor}`;
   } else {
-    comissaoBox.style.display = "none";
+    resumo.style.display = "none";
   }
 }
 </script>
+
+</body>
+</html>
