@@ -36,6 +36,16 @@ body {
   font-size: 13px;
 }
 
+/* ===== COMISSÃO ===== */
+.comissao-topo {
+  margin-top: 10px;
+  background: #16a34a;
+  padding: 10px;
+  border-radius: 10px;
+  font-weight: bold;
+  font-size: 13px;
+}
+
 /* ===== FILTROS ===== */
 .filtros {
   background: #fff;
@@ -71,6 +81,12 @@ select, input {
   border-radius: 14px;
   padding: 12px;
   box-shadow: 0 2px 6px rgba(0,0,0,.06);
+  color: #000;
+}
+
+.card.disponivel {
+  background: #16a34a;
+  color: #fff;
 }
 
 .card h3 {
@@ -91,7 +107,7 @@ select, input {
 
 .entrada { background: #e0f2fe; color: #0369a1; }
 .vendido { background: #dcfce7; color: #166534; }
-.nao { background: #fee2e2; color: #991b1b; }
+.nao { background: #00000033; color: #fff; }
 
 .info {
   display: grid;
@@ -101,7 +117,7 @@ select, input {
 }
 
 .info div {
-  background: #f7f7f7;
+  background: #ffffff33;
   padding: 6px;
   border-radius: 6px;
 }
@@ -110,22 +126,11 @@ select, input {
   margin-top: 8px;
   padding: 8px;
   border-radius: 10px;
-  background: #16a34a;
+  background: #0f172a;
   color: #ffffff;
   font-weight: bold;
   text-align: center;
   font-size: 13px;
-}
-
-.comissao {
-  margin-top: 6px;
-  padding: 6px;
-  border-radius: 8px;
-  background: #ecfdf3;
-  color: #065f46;
-  font-weight: bold;
-  text-align: center;
-  font-size: 12px;
 }
 </style>
 </head>
@@ -140,6 +145,8 @@ select, input {
     <div class="box" id="totalVendidos">Vendidos: 0</div>
     <div class="box" id="totalDisponiveis">Disponíveis: 0</div>
   </div>
+
+  <div class="comissao-topo" id="comissaoVendedor" style="display:none"></div>
 </div>
 
 <div class="filtros">
@@ -175,11 +182,8 @@ document.getElementById("status").onchange = render;
 function carregarVendedores() {
   const select = document.getElementById("vendedor");
   const vendedores = [...new Set(dados.slice(1).map(l => l[1]).filter(Boolean))];
-
   select.innerHTML = `<option value="">Todos vendedores</option>`;
-  vendedores.forEach(v => {
-    select.innerHTML += `<option value="${v}">${v}</option>`;
-  });
+  vendedores.forEach(v => select.innerHTML += `<option value="${v}">${v}</option>`);
 }
 
 function render() {
@@ -190,15 +194,12 @@ function render() {
 
   lista.innerHTML = "";
 
+  let total = 0, vendidos = 0, disponiveis = 0;
   let lucroTotalMes = 0;
-  let total = 0;
-  let vendidos = 0;
-  let disponiveis = 0;
+  let vendidosVendedor = 0;
 
   dados.slice(1).forEach(l => {
     const vendedor = l[1];
-
-    // 🔥 QUALQUER COISA DIFERENTE DE "SIM" É DISPONÍVEL
     const vendido = (l[11] || "").toUpperCase() === "SIM" ? "SIM" : "NAO";
 
     if (vendedorFiltro && vendedorFiltro !== vendedor) return;
@@ -207,50 +208,47 @@ function render() {
 
     total++;
     vendido === "SIM" ? vendidos++ : disponiveis++;
+    if (vendido === "SIM" && vendedorFiltro) vendidosVendedor++;
 
     const valorEntrada = Number(l[8]) || 0;
     const custoReparo = Number(l[9]) || 0;
     const valorVenda = Number(l[10]) || 0;
-    const custosAdicionais = Number(l[13]) || 0;
-    const comissao = Number(l[15]) || 0;
-
+    const custosAdicionais = Number(l[12]) || 0;
     const lucro = valorVenda - valorEntrada - custoReparo - custosAdicionais;
 
-    if (vendido === "SIM" && mesFiltro) {
-      lucroTotalMes += lucro;
-    }
-
     lista.innerHTML += `
-      <div class="card">
+      <div class="card ${vendido === "NAO" ? "disponivel" : ""}">
         <h3>📱 ${l[4]} • ${l[5]}</h3>
 
         <div class="tags">
           <span class="tag entrada">${l[3]}</span>
-          <span class="tag ${vendido === "SIM" ? "vendido" : "nao"}">${vendido}</span>
+          <span class="tag ${vendido === "SIM" ? "vendido" : "nao"}">${vendido === "SIM" ? "VENDIDO" : "DISPONÍVEL"}</span>
         </div>
 
         <div class="info">
-          <div><b>Cliente:</b> ${l[2]}</div>
           <div><b>Bateria:</b> ${l[7]}%</div>
-          <div><b>Pago:</b> R$ ${valorEntrada}</div>
-          <div><b>Venda:</b> R$ ${valorVenda}</div>
+          <div><b>Entrada:</b> R$ ${valorEntrada}</div>
           <div><b>Reparo:</b> R$ ${custoReparo}</div>
-          <div><b>Custos +:</b> R$ ${custosAdicionais}</div>
+          <div><b>Adicional:</b> R$ ${custosAdicionais}</div>
         </div>
 
-        <div class="lucro">💰 R$ ${lucro}</div>
-
-        ${comissao > 0 ? `<div class="comissao">Comissão: R$ ${comissao}</div>` : ""}
+        <div class="lucro">💰 Lucro: R$ ${lucro}</div>
       </div>
     `;
   });
 
-  document.getElementById("lucroMes").innerText =
-    mesFiltro ? `💰 Lucro total do mês: R$ ${lucroTotalMes}` : "💰 Selecione um mês";
-
   document.getElementById("totalGeral").innerText = `Total: ${total}`;
   document.getElementById("totalVendidos").innerText = `Vendidos: ${vendidos}`;
   document.getElementById("totalDisponiveis").innerText = `Disponíveis: ${disponiveis}`;
+
+  const comissaoBox = document.getElementById("comissaoVendedor");
+  if (vendedorFiltro) {
+    const comissao = vendidosVendedor * 30;
+    comissaoBox.style.display = "block";
+    comissaoBox.innerText = `👤 ${vendedorFiltro} • Vendidos: ${vendidosVendedor} • Comissão: R$ ${comissao}`;
+  } else {
+    comissaoBox.style.display = "none";
+  }
 }
 </script>
 
