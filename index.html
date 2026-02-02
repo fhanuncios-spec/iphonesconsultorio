@@ -193,11 +193,43 @@ function carregarVendedores() {
   });
 }
 
+/* Parse robusto: Date, ISO, e BR dd/mm/aaaa */
+function parseDate(value) {
+  if (!value) return null;
+
+  if (Object.prototype.toString.call(value) === "[object Date]") {
+    return isNaN(value) ? null : value;
+  }
+
+  // Tenta ISO / formatos padrão
+  const d1 = new Date(value);
+  if (!isNaN(d1)) return d1;
+
+  // Tenta dd/mm/aaaa ou dd-mm-aaaa
+  const s = String(value).trim();
+  const m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  if (m) {
+    const dd = parseInt(m[1], 10);
+    const mm = parseInt(m[2], 10) - 1;
+    let yy = parseInt(m[3], 10);
+    if (yy < 100) yy += 2000;
+    const d2 = new Date(yy, mm, dd);
+    return isNaN(d2) ? null : d2;
+  }
+
+  return null;
+}
+
 function formatarData(data) {
-  if (!data) return "-";
-  const d = new Date(data);
-  if (isNaN(d)) return "-";
+  const d = parseDate(data);
+  if (!d) return "-";
   return d.toLocaleDateString("pt-BR");
+}
+
+function getMesYYYYMM(dateValue) {
+  const d = parseDate(dateValue);
+  if (!d) return "";
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,"0")}`;
 }
 
 function render() {
@@ -210,6 +242,9 @@ function render() {
 
   let total = 0, vendidos = 0, disponiveis = 0;
   let lucroMes = 0, lucroVendedor = 0, vendidosVendedor = 0;
+
+  // 1) Monta uma lista de itens filtrados (para ordenar antes de renderizar)
+  const itens = [];
 
   dados.slice(1).forEach(l => {
     const vendedor = l[1];
@@ -233,44 +268,74 @@ function render() {
 
     const lucro = valorVenda - valorEntrada - custoReparo - custosAdicionais;
 
-    let mesVenda = "";
-    if (l[13]) {
-      const d = new Date(l[13]);
-      mesVenda = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
-    }
+    const mesVenda = getMesYYYYMM(l[13]);
 
+    // ✅ LUCRO DO MÊS: SOMENTE VENDIDOS NO MÊS SELECIONADO
     if (vendido === "SIM" && mesFiltro && mesVenda === mesFiltro) {
       lucroMes += lucro;
     }
 
+    // ✅ RESUMO DO VENDEDOR: SE TIVER MÊS SELECIONADO, CONSIDERA SÓ AQUELE MÊS
     if (vendido === "SIM" && vendedorFiltro === vendedor) {
-      vendidosVendedor++;
-      lucroVendedor += lucro;
+      if (!mesFiltro || mesVenda === mesFiltro) {
+        vendidosVendedor++;
+        lucroVendedor += lucro;
+      }
     }
 
+    itens.push({
+      row: l,
+      vendido,
+      cliente,
+      dataEntrada,
+      dataVenda,
+      valorEntrada,
+      custoReparo,
+      valorVenda,
+      custosAdicionais,
+      lucro,
+      dataEntradaTS: (parseDate(l[0]) ? parseDate(l[0]).getTime() : 0)
+    });
+  });
+
+  // 2) Ordena: Disponíveis primeiro, depois por DataEntrada (desc) em cada grupo
+  itens.sort((a, b) => {
+    // Disponível (NAO) primeiro
+    const ga = (a.vendido === "NAO") ? 0 : 1;
+    const gb = (b.vendido === "NAO") ? 0 : 1;
+    if (ga !== gb) return ga - gb;
+
+    // Dentro do grupo: DataEntrada mais recente primeiro
+    return (b.dataEntradaTS || 0) - (a.dataEntradaTS || 0);
+  });
+
+  // 3) Renderiza já ordenado
+  itens.forEach(item => {
+    const l = item.row;
+
     lista.innerHTML += `
-      <div class="card ${vendido === "NAO" ? "disponivel" : ""}">
+      <div class="card ${item.vendido === "NAO" ? "disponivel" : ""}">
         <h3>📱 ${l[4]} • ${l[5]}</h3>
 
         <div class="tags">
           <span class="tag entrada">${l[3]}</span>
-          <span class="tag ${vendido === "SIM" ? "vendido" : "nao"}">
-            ${vendido === "SIM" ? "VENDIDO" : "DISPONÍVEL"}
+          <span class="tag ${item.vendido === "SIM" ? "vendido" : "nao"}">
+            ${item.vendido === "SIM" ? "VENDIDO" : "DISPONÍVEL"}
           </span>
         </div>
 
         <div class="info">
-          <div><b>Cliente:</b> ${cliente}</div>
+          <div><b>Cliente:</b> ${item.cliente}</div>
           <div><b>Bateria:</b> ${l[7]}%</div>
-          <div><b>Compra:</b> ${dataEntrada}</div>
-          <div><b>Venda:</b> ${dataVenda}</div>
-          <div><b>Pago:</b> R$ ${valorEntrada}</div>
-          <div><b>Valor venda:</b> R$ ${valorVenda}</div>
-          <div><b>Reparo:</b> R$ ${custoReparo}</div>
-          <div><b>Adicional:</b> R$ ${custosAdicionais}</div>
+          <div><b>Compra:</b> ${item.dataEntrada}</div>
+          <div><b>Venda:</b> ${item.dataVenda}</div>
+          <div><b>Pago:</b> R$ ${item.valorEntrada}</div>
+          <div><b>Valor venda:</b> R$ ${item.valorVenda}</div>
+          <div><b>Reparo:</b> R$ ${item.custoReparo}</div>
+          <div><b>Adicional:</b> R$ ${item.custosAdicionais}</div>
         </div>
 
-        <div class="lucro">💰 Lucro: R$ ${lucro}</div>
+        <div class="lucro">💰 Lucro: R$ ${item.lucro}</div>
       </div>
     `;
   });
