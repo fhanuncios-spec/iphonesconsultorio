@@ -46,6 +46,32 @@ body {
   display: none;
 }
 
+/* ===== RESUMO MÊS POR VENDEDOR ===== */
+#resumoMes {
+  margin-top: 10px;
+  background: #111827;
+  color: #ffffff;
+  padding: 10px;
+  border-radius: 10px;
+  font-size: 13px;
+  text-align: left;
+  display: none;
+}
+
+#resumoMes .linha {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+#resumoMes .linha:last-child { border-bottom: none; }
+
+#resumoMes .total {
+  font-weight: bold;
+  margin-bottom: 6px;
+}
+
 /* ===== FILTROS ===== */
 .filtros {
   background: #fff;
@@ -150,6 +176,9 @@ select, input {
     <div class="box" id="totalDisponiveis">Disponíveis: 0</div>
   </div>
 
+  <!-- ✅ Novo resumo de vendidos por mês (total + por vendedor) -->
+  <div id="resumoMes"></div>
+
   <div id="resumoVendedor"></div>
 </div>
 
@@ -201,11 +230,9 @@ function parseDate(value) {
     return isNaN(value) ? null : value;
   }
 
-  // Tenta ISO / formatos padrão
   const d1 = new Date(value);
   if (!isNaN(d1)) return d1;
 
-  // Tenta dd/mm/aaaa ou dd-mm-aaaa
   const s = String(value).trim();
   const m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
   if (m) {
@@ -232,6 +259,52 @@ function getMesYYYYMM(dateValue) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,"0")}`;
 }
 
+function renderResumoMes(mesFiltro) {
+  const box = document.getElementById("resumoMes");
+
+  if (!mesFiltro) {
+    box.style.display = "none";
+    box.innerHTML = "";
+    return;
+  }
+
+  // pega lista de vendedores da própria planilha
+  const vendedores = [...new Set(dados.slice(1).map(l => l[1]).filter(Boolean))];
+
+  const vendidosPorVendedor = {};
+  vendedores.forEach(v => vendidosPorVendedor[v] = 0);
+
+  let totalVendidosMes = 0;
+
+  dados.slice(1).forEach(l => {
+    const vendedor = l[1];
+    const vendido = (l[11] || "").toUpperCase() === "SIM" ? "SIM" : "NAO";
+    const mesVenda = getMesYYYYMM(l[13]);
+
+    if (vendido === "SIM" && mesVenda === mesFiltro) {
+      totalVendidosMes++;
+      if (vendedor) {
+        if (!vendidosPorVendedor[vendedor]) vendidosPorVendedor[vendedor] = 0;
+        vendidosPorVendedor[vendedor]++;
+      }
+    }
+  });
+
+  // monta html
+  let html = `<div class="total">📦 Vendidos em ${mesFiltro}: <b>${totalVendidosMes}</b></div>`;
+
+  // ordena por maior quantidade
+  const entries = Object.entries(vendidosPorVendedor)
+    .sort((a,b) => (b[1]||0) - (a[1]||0));
+
+  entries.forEach(([v, qtd]) => {
+    html += `<div class="linha"><span>${v}</span><span><b>${qtd}</b></span></div>`;
+  });
+
+  box.innerHTML = html;
+  box.style.display = "block";
+}
+
 function render() {
   const lista = document.getElementById("lista");
   const vendedorFiltro = document.getElementById("vendedor").value;
@@ -243,7 +316,6 @@ function render() {
   let total = 0, vendidos = 0, disponiveis = 0;
   let lucroMes = 0, lucroVendedor = 0, vendidosVendedor = 0;
 
-  // 1) Monta uma lista de itens filtrados (para ordenar antes de renderizar)
   const itens = [];
 
   dados.slice(1).forEach(l => {
@@ -270,12 +342,12 @@ function render() {
 
     const mesVenda = getMesYYYYMM(l[13]);
 
-    // ✅ LUCRO DO MÊS: SOMENTE VENDIDOS NO MÊS SELECIONADO
+    // Lucro mês: somente vendidos no mês selecionado
     if (vendido === "SIM" && mesFiltro && mesVenda === mesFiltro) {
       lucroMes += lucro;
     }
 
-    // ✅ RESUMO DO VENDEDOR: SE TIVER MÊS SELECIONADO, CONSIDERA SÓ AQUELE MÊS
+    // Resumo do vendedor: se mês selecionado, só aquele mês
     if (vendido === "SIM" && vendedorFiltro === vendedor) {
       if (!mesFiltro || mesVenda === mesFiltro) {
         vendidosVendedor++;
@@ -298,18 +370,14 @@ function render() {
     });
   });
 
-  // 2) Ordena: Disponíveis primeiro, depois por DataEntrada (desc) em cada grupo
+  // Ordena: Disponíveis primeiro, depois por DataEntrada desc
   itens.sort((a, b) => {
-    // Disponível (NAO) primeiro
     const ga = (a.vendido === "NAO") ? 0 : 1;
     const gb = (b.vendido === "NAO") ? 0 : 1;
     if (ga !== gb) return ga - gb;
-
-    // Dentro do grupo: DataEntrada mais recente primeiro
     return (b.dataEntradaTS || 0) - (a.dataEntradaTS || 0);
   });
 
-  // 3) Renderiza já ordenado
   itens.forEach(item => {
     const l = item.row;
 
@@ -346,6 +414,9 @@ function render() {
 
   document.getElementById("lucroMes").innerText =
     mesFiltro ? `💰 Lucro total do mês: R$ ${lucroMes}` : "💰 Selecione um mês";
+
+  // ✅ Novo resumo no topo: vendidos do mês por vendedor + total
+  renderResumoMes(mesFiltro);
 
   const resumo = document.getElementById("resumoVendedor");
   if (vendedorFiltro) {
