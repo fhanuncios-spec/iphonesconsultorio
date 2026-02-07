@@ -46,8 +46,8 @@ body {
   display: none;
 }
 
-/* ===== RESUMO MÊS POR VENDEDOR ===== */
-#resumoMes {
+/* ===== RESUMO PERÍODO (TOTAL + POR VENDEDOR + COMISSÃO + LUCRO) ===== */
+#resumoPeriodo {
   margin-top: 10px;
   background: #111827;
   color: #ffffff;
@@ -58,18 +58,24 @@ body {
   display: none;
 }
 
-#resumoMes .linha {
+#resumoPeriodo .linha {
   display: flex;
   justify-content: space-between;
   gap: 10px;
   padding: 4px 0;
   border-bottom: 1px solid rgba(255,255,255,0.08);
 }
-#resumoMes .linha:last-child { border-bottom: none; }
+#resumoPeriodo .linha:last-child { border-bottom: none; }
 
-#resumoMes .total {
+#resumoPeriodo .total {
   font-weight: bold;
   margin-bottom: 6px;
+}
+
+#resumoPeriodo .sub {
+  opacity: .95;
+  font-size: 12px;
+  margin-bottom: 8px;
 }
 
 /* ===== FILTROS ===== */
@@ -176,8 +182,8 @@ select, input {
     <div class="box" id="totalDisponiveis">Disponíveis: 0</div>
   </div>
 
-  <!-- ✅ Novo resumo de vendidos por mês (total + por vendedor) -->
-  <div id="resumoMes"></div>
+  <!-- ✅ Resumo por período (data inicial/final): total + por vendedor + comissão + lucro -->
+  <div id="resumoPeriodo"></div>
 
   <div id="resumoVendedor"></div>
 </div>
@@ -191,7 +197,12 @@ select, input {
     <option value="NAO">Somente disponíveis</option>
   </select>
 
+  <!-- Mantive o mês como estava -->
   <input type="month" id="mes">
+
+  <!-- ✅ NOVO: Período (início/fim) -->
+  <input type="date" id="dataIni" placeholder="Data inicial">
+  <input type="date" id="dataFim" placeholder="Data final">
 </div>
 
 <div id="lista"></div>
@@ -211,6 +222,8 @@ fetch(URL)
 document.getElementById("vendedor").onchange = render;
 document.getElementById("status").onchange = render;
 document.getElementById("mes").onchange = render;
+document.getElementById("dataIni").onchange = render;
+document.getElementById("dataFim").onchange = render;
 
 function carregarVendedores() {
   const select = document.getElementById("vendedor");
@@ -230,9 +243,11 @@ function parseDate(value) {
     return isNaN(value) ? null : value;
   }
 
+  // ISO / padrão
   const d1 = new Date(value);
   if (!isNaN(d1)) return d1;
 
+  // BR dd/mm/aaaa ou dd-mm-aaaa
   const s = String(value).trim();
   const m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
   if (m) {
@@ -259,46 +274,78 @@ function getMesYYYYMM(dateValue) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,"0")}`;
 }
 
-function renderResumoMes(mesFiltro) {
-  const box = document.getElementById("resumoMes");
+// Normaliza date input (yyyy-mm-dd) para início do dia e fim do dia
+function parseDateInputIni(v) {
+  if (!v) return null;
+  const d = new Date(v + "T00:00:00");
+  return isNaN(d) ? null : d;
+}
+function parseDateInputFim(v) {
+  if (!v) return null;
+  const d = new Date(v + "T23:59:59");
+  return isNaN(d) ? null : d;
+}
 
-  if (!mesFiltro) {
+// ✅ Resumo por período: conta vendidos (por DataVenda) dentro do intervalo + lucro total
+function renderResumoPeriodo(dtIni, dtFim) {
+  const box = document.getElementById("resumoPeriodo");
+
+  // precisa ter pelo menos uma data preenchida
+  if (!dtIni && !dtFim) {
     box.style.display = "none";
     box.innerHTML = "";
     return;
   }
 
-  // pega lista de vendedores da própria planilha
   const vendedores = [...new Set(dados.slice(1).map(l => l[1]).filter(Boolean))];
-
   const vendidosPorVendedor = {};
   vendedores.forEach(v => vendidosPorVendedor[v] = 0);
 
-  let totalVendidosMes = 0;
+  let totalVendidosPeriodo = 0;
+  let lucroTotalPeriodo = 0;
 
   dados.slice(1).forEach(l => {
     const vendedor = l[1];
     const vendido = (l[11] || "").toUpperCase() === "SIM" ? "SIM" : "NAO";
-    const mesVenda = getMesYYYYMM(l[13]);
+    if (vendido !== "SIM") return;
 
-    if (vendido === "SIM" && mesVenda === mesFiltro) {
-      totalVendidosMes++;
-      if (vendedor) {
-        if (!vendidosPorVendedor[vendedor]) vendidosPorVendedor[vendedor] = 0;
-        vendidosPorVendedor[vendedor]++;
-      }
+    const dtVenda = parseDate(l[13]);
+    if (!dtVenda) return;
+
+    // filtro período
+    if (dtIni && dtVenda < dtIni) return;
+    if (dtFim && dtVenda > dtFim) return;
+
+    const valorEntrada = Number(l[8]) || 0;
+    const custoReparo = Number(l[9]) || 0;
+    const valorVenda = Number(l[10]) || 0;
+    const custosAdicionais = Number(l[12]) || 0;
+    const lucro = valorVenda - valorEntrada - custoReparo - custosAdicionais;
+
+    totalVendidosPeriodo++;
+    lucroTotalPeriodo += lucro;
+
+    if (vendedor) {
+      if (!vendidosPorVendedor[vendedor]) vendidosPorVendedor[vendedor] = 0;
+      vendidosPorVendedor[vendedor]++;
     }
   });
 
-  // monta html
-  let html = `<div class="total">📦 Vendidos em ${mesFiltro}: <b>${totalVendidosMes}</b></div>`;
+  const iniTxt = dtIni ? dtIni.toLocaleDateString("pt-BR") : "—";
+  const fimTxt = dtFim ? dtFim.toLocaleDateString("pt-BR") : "—";
+  const comissaoTotal = totalVendidosPeriodo * 30;
 
-  // ordena por maior quantidade
+  let html = `
+    <div class="total">📦 Vendidos no período: <b>${totalVendidosPeriodo}</b></div>
+    <div class="sub">📅 ${iniTxt} até ${fimTxt} • Comissão: <b>R$ ${comissaoTotal}</b> • Lucro: <b>R$ ${lucroTotalPeriodo}</b></div>
+  `;
+
   const entries = Object.entries(vendidosPorVendedor)
     .sort((a,b) => (b[1]||0) - (a[1]||0));
 
   entries.forEach(([v, qtd]) => {
-    html += `<div class="linha"><span>${v}</span><span><b>${qtd}</b></span></div>`;
+    const com = (qtd || 0) * 30;
+    html += `<div class="linha"><span>${v}</span><span><b>${qtd}</b> • R$ <b>${com}</b></span></div>`;
   });
 
   box.innerHTML = html;
@@ -311,6 +358,11 @@ function render() {
   const statusFiltro = document.getElementById("status").value;
   const mesFiltro = document.getElementById("mes").value;
 
+  // ✅ Período
+  const dtIni = parseDateInputIni(document.getElementById("dataIni").value);
+  const dtFim = parseDateInputFim(document.getElementById("dataFim").value);
+  const periodoAtivo = !!dtIni || !!dtFim;
+
   lista.innerHTML = "";
 
   let total = 0, vendidos = 0, disponiveis = 0;
@@ -322,9 +374,21 @@ function render() {
     const vendedor = l[1];
     const vendido = (l[11] || "").toUpperCase() === "SIM" ? "SIM" : "NAO";
 
+    // filtros existentes
     if (vendedorFiltro && vendedorFiltro !== vendedor) return;
     if (statusFiltro === "SIM" && vendido !== "SIM") return;
     if (statusFiltro === "NAO" && vendido === "SIM") return;
+
+    // ✅ NOVO: se período ativo, mostrar SOMENTE os vendidos dentro do período (por DataVenda)
+    if (periodoAtivo) {
+      if (vendido !== "SIM") return;
+
+      const dtVenda = parseDate(l[13]);
+      if (!dtVenda) return;
+
+      if (dtIni && dtVenda < dtIni) return;
+      if (dtFim && dtVenda > dtFim) return;
+    }
 
     total++;
     vendido === "SIM" ? vendidos++ : disponiveis++;
@@ -342,12 +406,12 @@ function render() {
 
     const mesVenda = getMesYYYYMM(l[13]);
 
-    // Lucro mês: somente vendidos no mês selecionado
+    // Lucro mês: somente vendidos no mês selecionado (mantido)
     if (vendido === "SIM" && mesFiltro && mesVenda === mesFiltro) {
       lucroMes += lucro;
     }
 
-    // Resumo do vendedor: se mês selecionado, só aquele mês
+    // Resumo do vendedor: se mês selecionado, só aquele mês (mantido)
     if (vendido === "SIM" && vendedorFiltro === vendedor) {
       if (!mesFiltro || mesVenda === mesFiltro) {
         vendidosVendedor++;
@@ -370,7 +434,8 @@ function render() {
     });
   });
 
-  // Ordena: Disponíveis primeiro, depois por DataEntrada desc
+  // Ordena: Disponíveis primeiro, depois por DataEntrada desc (mantido)
+  // Obs: se período ativo, só haverá vendidos, mas a ordenação não atrapalha.
   itens.sort((a, b) => {
     const ga = (a.vendido === "NAO") ? 0 : 1;
     const gb = (b.vendido === "NAO") ? 0 : 1;
@@ -415,8 +480,8 @@ function render() {
   document.getElementById("lucroMes").innerText =
     mesFiltro ? `💰 Lucro total do mês: R$ ${lucroMes}` : "💰 Selecione um mês";
 
-  // ✅ Novo resumo no topo: vendidos do mês por vendedor + total
-  renderResumoMes(mesFiltro);
+  // ✅ Resumo por período: total + por vendedor + comissão + lucro total
+  renderResumoPeriodo(dtIni, dtFim);
 
   const resumo = document.getElementById("resumoVendedor");
   if (vendedorFiltro) {
