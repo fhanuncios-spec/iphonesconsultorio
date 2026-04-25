@@ -49,10 +49,6 @@ body {
   font-size: 14px;
 }
 
-#btnResumoDisponiveis:hover {
-  background: #16a34a;
-}
-
 #resumoDisponiveis {
   margin-top: 10px;
   background: #052e16;
@@ -457,6 +453,7 @@ function renderResumoDisponiveis() {
 
   if (!resumoDisponiveisAberto) {
     box.style.display = "none";
+    box.innerHTML = "";
     btn.innerText = "📊 Ver totais dos disponíveis para venda";
     return;
   }
@@ -551,9 +548,9 @@ function renderResumoMes(mesFiltro) {
     <div class="total">📦 Vendidos no mês: <b>${totalVendidosMes}</b></div>
     <div class="sub">
       🗓️ ${mesFiltro}
-      • Atend. balcão (Raquel): <b>${atendimentosBalcaoRaquelMes}</b> (R$ ${COMISSAO_VALOR} cada) = <b>R$ ${comissaoRaquelMes}</b>
-      • Lucro bruto: <b>R$ ${lucroMesBruto}</b>
-      • Lucro líquido (descontando só balcão da Raquel): <b>R$ ${lucroLiquidoMes}</b>
+      • Atend. balcão (Raquel): <b>${atendimentosBalcaoRaquelMes}</b> (R$ ${COMISSAO_VALOR} cada) = <b>${formatarMoeda(comissaoRaquelMes)}</b>
+      • Lucro bruto: <b>${formatarMoeda(lucroBrutoMes)}</b>
+      • Lucro líquido (descontando só balcão da Raquel): <b>${formatarMoeda(lucroLiquidoMes)}</b>
     </div>
   `;
 
@@ -629,9 +626,9 @@ function renderResumoPeriodo(dtIni, dtFim) {
     <div class="total">📦 Vendidos no período: <b>${totalVendidosPeriodo}</b></div>
     <div class="sub">
       📅 ${iniTxt} até ${fimTxt}
-      • Atend. balcão (Raquel): <b>${atendimentosBalcaoRaquelPeriodo}</b> (R$ ${COMISSAO_VALOR} cada) = <b>R$ ${comissaoRaquelPeriodo}</b>
-      • Lucro bruto: <b>R$ ${lucroBrutoPeriodo}</b>
-      • Lucro líquido (descontando só balcão da Raquel): <b>R$ ${lucroLiquidoPeriodo}</b>
+      • Atend. balcão (Raquel): <b>${atendimentosBalcaoRaquelPeriodo}</b> (R$ ${COMISSAO_VALOR} cada) = <b>${formatarMoeda(comissaoRaquelPeriodo)}</b>
+      • Lucro bruto: <b>${formatarMoeda(lucroBrutoPeriodo)}</b>
+      • Lucro líquido (descontando só balcão da Raquel): <b>${formatarMoeda(lucroLiquidoPeriodo)}</b>
     </div>
   `;
 
