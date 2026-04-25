@@ -36,6 +36,46 @@ body {
   font-size: 13px;
 }
 
+#btnResumoDisponiveis {
+  width: 100%;
+  margin-top: 10px;
+  background: #22c55e;
+  color: #ffffff;
+  border: none;
+  padding: 12px;
+  border-radius: 12px;
+  font-weight: bold;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+#btnResumoDisponiveis:hover {
+  background: #16a34a;
+}
+
+#resumoDisponiveis {
+  margin-top: 10px;
+  background: #052e16;
+  color: #ffffff;
+  padding: 10px;
+  border-radius: 10px;
+  font-size: 13px;
+  text-align: left;
+  display: none;
+}
+
+#resumoDisponiveis .linha {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+}
+
+#resumoDisponiveis .linha:last-child {
+  border-bottom: none;
+}
+
 #resumoVendedor {
   margin-top: 10px;
   background: #22c55e;
@@ -245,6 +285,12 @@ select, input {
     <div class="box" id="totalDisponiveis">Disponíveis: 0</div>
   </div>
 
+  <button id="btnResumoDisponiveis" onclick="toggleResumoDisponiveis()">
+    📊 Ver totais dos disponíveis para venda
+  </button>
+
+  <div id="resumoDisponiveis"></div>
+
   <!-- ✅ Resumo do mês -->
   <div id="resumoMes"></div>
 
@@ -274,10 +320,18 @@ select, input {
 <script>
 const URL = "https://script.google.com/macros/s/AKfycbwuroYkA_84ft4-fCOheB7_euWSHZrNuPlX_mZA97zekM2KAAss-7LCGhPhL401SQ2E/exec";
 let dados = [];
+let resumoDisponiveisAberto = false;
 
 const COMISSAO_VALOR = 30;
 const NOME_RAQUEL = "Raquel";
 const LS_KEY = "comissao_balcao_overrides_v2";
+
+function formatarMoeda(valor) {
+  return Number(valor || 0).toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL"
+  });
+}
 
 /* ===============================
    Persistência (LocalStorage)
@@ -392,14 +446,57 @@ function carregarVendedores() {
   });
 }
 
+function toggleResumoDisponiveis() {
+  resumoDisponiveisAberto = !resumoDisponiveisAberto;
+  renderResumoDisponiveis();
+}
+
+function renderResumoDisponiveis() {
+  const box = document.getElementById("resumoDisponiveis");
+  const btn = document.getElementById("btnResumoDisponiveis");
+
+  if (!resumoDisponiveisAberto) {
+    box.style.display = "none";
+    btn.innerText = "📊 Ver totais dos disponíveis para venda";
+    return;
+  }
+
+  let quantidade = 0;
+  let totalCusto = 0;
+  let totalVenda = 0;
+  let lucroTotal = 0;
+
+  dados.slice(1).forEach(l => {
+    const vendido = (l[11] || "").toUpperCase() === "SIM" ? "SIM" : "NAO";
+    if (vendido === "SIM") return;
+
+    const valorEntrada = Number(l[8]) || 0;
+    const custoReparo = Number(l[9]) || 0;
+    const valorVenda = Number(l[10]) || 0;
+    const custosAdicionais = Number(l[12]) || 0;
+
+    const custoTotalAparelho = valorEntrada + custoReparo + custosAdicionais;
+    const lucroPrevisto = valorVenda - custoTotalAparelho;
+
+    quantidade++;
+    totalCusto += custoTotalAparelho;
+    totalVenda += valorVenda;
+    lucroTotal += lucroPrevisto;
+  });
+
+  box.innerHTML = `
+    <div class="linha"><span>📱 Aparelhos disponíveis</span><strong>${quantidade}</strong></div>
+    <div class="linha"><span>💸 Total preço de custo</span><strong>${formatarMoeda(totalCusto)}</strong></div>
+    <div class="linha"><span>🏷️ Total valor de venda</span><strong>${formatarMoeda(totalVenda)}</strong></div>
+    <div class="linha"><span>💰 Lucro total previsto</span><strong>${formatarMoeda(lucroTotal)}</strong></div>
+  `;
+
+  box.style.display = "block";
+  btn.innerText = "❌ Ocultar totais dos disponíveis";
+}
+
 /* ===============================
-   RESUMO DO MÊS (ATUALIZADO)
-   - Mostra:
-     1) total vendidos no mês
-     2) por vendedor (no registro)
-     3) comissão da Raquel (balcão) = atendimentos balcão * 30
-     4) lucro bruto do mês (SEM descontar nada)
-     5) lucro líquido do mês (descontando somente balcão da Raquel)
+   RESUMO DO MÊS
    =============================== */
 function renderResumoMes(mesFiltro) {
   const box = document.getElementById("resumoMes");
@@ -418,7 +515,7 @@ function renderResumoMes(mesFiltro) {
   let lucroBrutoMes = 0;
   let lucroLiquidoMes = 0;
 
-  let atendimentosBalcaoRaquelMes = 0; // ✅ quantidade de balcão (R$30 cada)
+  let atendimentosBalcaoRaquelMes = 0;
 
   dados.slice(1).forEach(l => {
     const vendedor = l[1];
@@ -455,7 +552,7 @@ function renderResumoMes(mesFiltro) {
     <div class="sub">
       🗓️ ${mesFiltro}
       • Atend. balcão (Raquel): <b>${atendimentosBalcaoRaquelMes}</b> (R$ ${COMISSAO_VALOR} cada) = <b>R$ ${comissaoRaquelMes}</b>
-      • Lucro bruto: <b>R$ ${lucroBrutoMes}</b>
+      • Lucro bruto: <b>R$ ${lucroMesBruto}</b>
       • Lucro líquido (descontando só balcão da Raquel): <b>R$ ${lucroLiquidoMes}</b>
     </div>
   `;
@@ -472,13 +569,7 @@ function renderResumoMes(mesFiltro) {
 }
 
 /* ===============================
-   RESUMO POR PERÍODO (ATUALIZADO)
-   - Mostra:
-     1) vendidos no período
-     2) por vendedor (no registro)
-     3) atend. balcão (Raquel) e comissão dela (qtd*30)
-     4) lucro bruto período
-     5) lucro líquido período (descontando só balcão da Raquel)
+   RESUMO POR PERÍODO
    =============================== */
 function renderResumoPeriodo(dtIni, dtFim) {
   const box = document.getElementById("resumoPeriodo");
@@ -569,12 +660,10 @@ function render() {
   let total = 0, vendidos = 0, disponiveis = 0;
   let lucroMesBruto = 0, lucroMesLiquido = 0;
 
-  // resumo do vendedor filtrado (no nome)
   let vendidosVendedorNoNome = 0;
   let lucroVendedorBruto = 0;
   let lucroVendedorLiquido = 0;
 
-  // ✅ para mostrar atendimentos balcão da Raquel no filtro do vendedor (se escolher Raquel)
   let atendimentosBalcaoRaquelNoFiltro = 0;
   let comissaoRaquelNoFiltro = 0;
 
@@ -613,20 +702,17 @@ function render() {
 
     const mesVenda = getMesYYYYMM(l[13]);
 
-    // topo do mês
     if (vendido === "SIM" && mesFiltro && mesVenda === mesFiltro) {
       lucroMesBruto += lucro;
       lucroMesLiquido += lucroLiq;
     }
 
-    // resumo do vendedor selecionado (no nome)
     if (vendido === "SIM" && vendedorFiltro === vendedor) {
       if (!mesFiltro || mesVenda === mesFiltro) {
         vendidosVendedorNoNome++;
         lucroVendedorBruto += lucro;
         lucroVendedorLiquido += lucroLiq;
 
-        // se o filtro for Raquel, contar os atendimentos do balcão marcados
         if (vendedorFiltro === NOME_RAQUEL && isBalcaoRaquel(l)) {
           atendimentosBalcaoRaquelNoFiltro++;
         }
@@ -651,10 +737,8 @@ function render() {
     });
   });
 
-  // ✅ comissões balcão do filtro (apenas se for Raquel)
   comissaoRaquelNoFiltro = atendimentosBalcaoRaquelNoFiltro * COMISSAO_VALOR;
 
-  // Ordena: Disponíveis primeiro, depois por DataEntrada desc
   itens.sort((a, b) => {
     const ga = (a.vendido === "NAO") ? 0 : 1;
     const gb = (b.vendido === "NAO") ? 0 : 1;
@@ -699,17 +783,17 @@ function render() {
           <div><b>Bateria:</b> ${l[7]}%</div>
           <div><b>Compra:</b> ${item.dataEntrada}</div>
           <div><b>Venda:</b> ${item.dataVenda}</div>
-          <div><b>Pago:</b> R$ ${item.valorEntrada}</div>
-          <div><b>Valor venda:</b> R$ ${item.valorVenda}</div>
-          <div><b>Reparo:</b> R$ ${item.custoReparo}</div>
-          <div><b>Adicional:</b> R$ ${item.custosAdicionais}</div>
+          <div><b>Pago:</b> ${formatarMoeda(item.valorEntrada)}</div>
+          <div><b>Valor venda:</b> ${formatarMoeda(item.valorVenda)}</div>
+          <div><b>Reparo:</b> ${formatarMoeda(item.custoReparo)}</div>
+          <div><b>Adicional:</b> ${formatarMoeda(item.custosAdicionais)}</div>
         </div>
 
         ${comissaoHtml}
 
         <div class="lucro">
-          💰 Lucro bruto: R$ ${item.lucro}
-          ${item.balcaoRaquel ? ` • Líquido (descontado R$ ${COMISSAO_VALOR} balcão Raquel): R$ ${item.lucroLiq}` : ""}
+          💰 Lucro bruto: ${formatarMoeda(item.lucro)}
+          ${item.balcaoRaquel ? ` • Líquido (descontado ${formatarMoeda(COMISSAO_VALOR)} balcão Raquel): ${formatarMoeda(item.lucroLiq)}` : ""}
         </div>
       </div>
     `;
@@ -719,28 +803,26 @@ function render() {
   document.getElementById("totalVendidos").innerText = `Vendidos: ${vendidos}`;
   document.getElementById("totalDisponiveis").innerText = `Disponíveis: ${disponiveis}`;
 
-  // ✅ topo do mês: agora mostra claramente bruto e líquido + comissão da Raquel (balcão)
-  // (o total de atendimentos balcão e comissão aparece no resumoMes)
   document.getElementById("lucroMes").innerText =
     mesFiltro
-      ? `💰 ${mesFiltro} • Lucro bruto: R$ ${lucroMesBruto} • Lucro líquido (descontando balcão Raquel): R$ ${lucroMesLiquido}`
+      ? `💰 ${mesFiltro} • Lucro bruto: ${formatarMoeda(lucroMesBruto)} • Lucro líquido (descontando balcão Raquel): ${formatarMoeda(lucroMesLiquido)}`
       : "💰 Selecione um mês";
 
+  renderResumoDisponiveis();
   renderResumoMes(mesFiltro);
   renderResumoPeriodo(dtIni, dtFim);
 
-  // ✅ resumo vendedor (mantido + ajustado para mostrar balcão da Raquel quando filtrar Raquel)
   const resumo = document.getElementById("resumoVendedor");
   if (vendedorFiltro) {
     resumo.style.display = "block";
 
     let extraRaquel = "";
     if (vendedorFiltro === NOME_RAQUEL) {
-      extraRaquel = ` • Atend. balcão (marcados): ${atendimentosBalcaoRaquelNoFiltro} • Comissão balcão: R$ ${comissaoRaquelNoFiltro}`;
+      extraRaquel = ` • Atend. balcão (marcados): ${atendimentosBalcaoRaquelNoFiltro} • Comissão balcão: ${formatarMoeda(comissaoRaquelNoFiltro)}`;
     }
 
     resumo.innerText =
-      `👤 ${vendedorFiltro} • Vendidos (no nome): ${vendidosVendedorNoNome} • Lucro bruto: R$ ${lucroVendedorBruto} • Lucro líquido (descontando balcão Raquel): R$ ${lucroVendedorLiquido}${extraRaquel}`;
+      `👤 ${vendedorFiltro} • Vendidos (no nome): ${vendidosVendedorNoNome} • Lucro bruto: ${formatarMoeda(lucroVendedorBruto)} • Lucro líquido (descontando balcão Raquel): ${formatarMoeda(lucroVendedorLiquido)}${extraRaquel}`;
   } else {
     resumo.style.display = "none";
   }
